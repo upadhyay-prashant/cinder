@@ -1,0 +1,15 @@
+Index: cinder/requirements.txt
+===================================================================
+--- cinder.orig/requirements.txt	2013-12-17 19:54:20.811733048 -0800
++++ cinder/requirements.txt	2013-12-17 20:00:20.879729788 -0800
+@@ -19,8 +19,8 @@
+ python-novaclient>=2.15.0
+ python-swiftclient>=1.5
+ Routes>=1.12.3
+-six>=1.4.1
+-SQLAlchemy>=0.7.8,<=0.7.99
++six
++SQLAlchemy>=0.7.8,<=0.8.99
+ sqlalchemy-migrate>=0.7.2
+ stevedore>=0.10
+ suds>=0.4
