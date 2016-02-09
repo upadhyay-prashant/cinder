@@ -65,6 +65,7 @@ class ExtractVolumeRequestTask(flow_utils.CinderTask):
                             'consistencygroup_id', 'cgsnapshot_id'])
 
     def __init__(self, image_service, availability_zones, **kwargs):
+        LOG.debug("\n======== prashant initializing class ")
         super(ExtractVolumeRequestTask, self).__init__(addons=[ACTION],
                                                        **kwargs)
         self.image_service = image_service
@@ -399,10 +400,11 @@ class ExtractVolumeRequestTask(flow_utils.CinderTask):
                 availability_zone, volume_type, metadata,
                 key_manager, source_replica,
                 consistencygroup, cgsnapshot):
-
-        utils.check_exclusive_options(snapshot=snapshot,
+        LOG.debug("\n+++++ checknig exclusive options ")
+        """utils.check_exclusive_options(snapshot=snapshot,
                                       imageRef=image_id,
-                                      source_volume=source_volume)
+                                      source_volume=source_volume)"""
+        LOG.debug("\n+++++ checking done")
         policy.enforce_action(context, ACTION)
 
         # TODO(harlowja): what guarantee is there that the snapshot or source
@@ -419,6 +421,7 @@ class ExtractVolumeRequestTask(flow_utils.CinderTask):
         availability_zone = self._extract_availability_zone(availability_zone,
                                                             snapshot,
                                                             source_volume)
+        LOG.debug("\n++++ snapshot_id is %s "%(snapshot_id))
 
         # TODO(joel-coffman): This special handling of snapshots to ensure that
         # their volume type matches the source volume is too convoluted. We
@@ -437,6 +440,7 @@ class ExtractVolumeRequestTask(flow_utils.CinderTask):
 
         volume_type_id = self._get_volume_type_id(volume_type,
                                                   source_volume, snapshot)
+        LOG.debug("\n++++ volume type is %s "%(volume_type_id))
 
         if image_id and volume_types.is_encrypted(context, volume_type_id):
             msg = _('Create encrypted volumes with type %(type)s '
@@ -729,8 +733,9 @@ class VolumeCastTask(flow_utils.CinderTask):
             # If snapshot_id is set, make the call create volume directly to
             # the volume host where the snapshot resides instead of passing it
             # through the scheduler. So snapshot can be copy to new volume.
-            snapshot_ref = self.db.snapshot_get(context, snapshot_id)
-            source_volume_ref = self.db.volume_get(context,
+            admin_context=context.elevated()
+            snapshot_ref = self.db.snapshot_get(admin_context, snapshot_id)
+            source_volume_ref = self.db.volume_get(admin_context,
                                                    snapshot_ref['volume_id'])
             host = source_volume_ref['host']
         elif source_volid:

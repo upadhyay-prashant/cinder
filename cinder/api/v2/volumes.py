@@ -1,4 +1,3 @@
-# Copyright 2011 Justin Santa Barbara
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -35,6 +34,7 @@ from cinder import utils
 from cinder import volume as cinder_volume
 from cinder.volume import utils as volume_utils
 from cinder.volume import volume_types
+from cinder.api.v2 import cache_volumes as volume_cache
 
 
 LOG = logging.getLogger(__name__)
@@ -165,6 +165,7 @@ class VolumeController(wsgi.Controller):
         self.volume_api = cinder_volume.API()
         self.consistencygroup_api = consistencygroupAPI.API()
         self.ext_mgr = ext_mgr
+        self.volume_cache= volume_cache.VolumeCache()
         super(VolumeController, self).__init__()
 
     @wsgi.serializers(xml=VolumeTemplate)
@@ -325,11 +326,108 @@ class VolumeController(wsgi.Controller):
         if volume.get('description'):
             volume['display_description'] = volume.get('description')
             del volume['description']
-
+        
+        """ my change starts """
+        snap_from_cache=False
+        original_imageRef=None
+        snapshot_id=None
         if 'image_id' in volume:
             volume['imageRef'] = volume.get('image_id')
+            original_imageRef=volume['imageRef']
             del volume['image_id']
+        
+        LOG.debug("\n+++ prashant_volume is %s"%(volume))
+        if 'imageRef' in volume and volume['imageRef'] is not None and  \
+                  volume['imageRef']+"_cache_volume"!=volume['display_name'] :
+            snapshot_id=self.volume_cache.get_cache_snapshot(req,body,self)
+        LOG.debug("\n+++ prashant_volume is %s"%(volume))
+        """
+        temp=volume['imageRef']+"_cache_volume"
+        if 'imageRef' in volume and volume['imageRef'] is not None and  \
+                      volume['imageRef']+"_cache_volume"!=volume['display_name'] :
+            LOG.debug("\n+++ image ref is %s, vol is %s"%(volume['imageRef'],volume['display_name']))
+            original_imageRef=volume['imageRef']
+            original_vol_name=volume['display_name']
+            vol_name_cache=volume['imageRef']+"_cache_volume"
+            snap_name_cache=volume['imageRef']+"_cache_snap"
+            context_cache=context.deepcopy()
+	    context_cache.project_name="service"
+	    context_cache.project_id="39ae471324974a9db15bb38a6e5049e2"
+	    context_cache.user_name="cinder"
+	    context_cache.user_id="89d14898f1b24da4998bfe1d6ea2974f"
+            LOG.debug("\n++++ vol name is %s"%(vol_name_cache))
+            try:
+                vol=self.volume_api.get_volume_by_name(context_cache,vol_name_cache)
+                LOG.debug("\n++++ vol from name is %s"%(vol))
+                snap=self.volume_api.get_snapshot_by_name(context_cache,snap_name_cache)
+                LOG.debug("\n++++ snap from name is %s"%(snap))
+                snapshot_id=snap['id']
+            except exception.NotFound:
+                #craete a volume with this name
+                LOG.debug("\n++++ exception hit")
+                req.environ['cinder.context']=context_cache
+                body['volume']['display_name']=vol_name_cache
+                temp=self.create(req,body)
+                LOG.debug("\n+++ temp is %s"%(temp))
+                vol_id=temp['volume']['id']
+                while True:
+                    try:
+                        vol=self.volume_api.get_volume(context_cache,vol_id)
+                        if vol['status']=="available":
+                            break
+                    except exception.NotFound:
+                        pass
+                LOG.debug("\n++++ vol is %s"%(vol))
+                snap_body={'snapshot': 
+                             {
+                              'volume_id': vol_id, 
+                              'force': False, 
+                              'description': None, 
+                              'name': volume['imageRef']+"_cache_snap"
+                             }
+                          }
+                from cinder.api.v2 import snapshots
+                snap_controller=snapshots.SnapshotsController()
+                temp=snap_controller.create(req,snap_body)
+                LOG.debug("\n+++++ snap temp is %s"%(temp))
+                snap_id=temp['snapshot']['id']
+                while True:
+                    try:
+                        snap=self.volume_api.get_snapshot(context_cache,snap_id)
+                        if snap['status']=="available":
+                            break
+                    except exception.NotFound:
+                        pass
+                body['volume']['display_name']=original_vol_name
+                snapshot_id=snap['id']
+            del volume['imageRef']
+            snap_from_cache=True
+        """
+        if snapshot_id is not None:
+           try:
+               snap_from_cache=True
+               admin_context=context.elevated()
+               kwargs['snapshot'] = self.volume_api.get_snapshot(admin_context,snapshot_id)
+           except exception.NotFound:
+               volume['imageRef']=original_imageRef
+               snap_from_cache=False
+        
+        if snapshot_id is None:
+            snapshot_id = volume.get('snapshot_id')
 
+
+        """ my code ends here"""
+        if snap_from_cache==False:
+            if snapshot_id is not None:
+                try:
+                    kwargs['snapshot'] = self.volume_api.get_snapshot(context,
+                                                                  snapshot_id)
+                except exception.NotFound:
+                    explanation = _('snapshot id:%s not found') % snapshot_id
+                    raise exc.HTTPNotFound(explanation=explanation)
+            else:
+                kwargs['snapshot'] = None
+  
         req_volume_type = volume.get('volume_type', None)
         if req_volume_type:
             try:
@@ -346,16 +444,6 @@ class VolumeController(wsgi.Controller):
 
         kwargs['metadata'] = volume.get('metadata', None)
 
-        snapshot_id = volume.get('snapshot_id')
-        if snapshot_id is not None:
-            try:
-                kwargs['snapshot'] = self.volume_api.get_snapshot(context,
-                                                                  snapshot_id)
-            except exception.NotFound:
-                explanation = _('snapshot id:%s not found') % snapshot_id
-                raise exc.HTTPNotFound(explanation=explanation)
-        else:
-            kwargs['snapshot'] = None
 
         source_volid = volume.get('source_volid')
         if source_volid is not None:
@@ -419,7 +507,7 @@ class VolumeController(wsgi.Controller):
         kwargs['scheduler_hints'] = volume.get('scheduler_hints', None)
         multiattach = volume.get('multiattach', False)
         kwargs['multiattach'] = multiattach
-
+        LOG.debug("\n+++++ displau_name is %s"%(volume['display_name']))
         new_volume = self.volume_api.create(context,
                                             size,
                                             volume.get('display_name'),

@@ -165,6 +165,8 @@ class SnapshotsController(wsgi.Controller):
     @wsgi.serializers(xml=SnapshotTemplate)
     def create(self, req, body):
         """Creates a new snapshot."""
+        LOG.debug("\n++++ snap req is %s"%(req))
+        LOG.debug("\n++++ body is %s"%(body))
         kwargs = {}
         context = req.environ['cinder.context']
 
@@ -183,9 +185,11 @@ class SnapshotsController(wsgi.Controller):
             raise exc.HTTPBadRequest(explanation=msg)
 
         try:
+            LOG.debug("\n++++ context is %s"%(context))
             volume = self.volume_api.get(context, volume_id)
         except exception.NotFound:
             msg = _("Volume could not be found")
+            LOG.debug("\n++++ i m hitting this ")
             raise exc.HTTPNotFound(explanation=msg)
         force = snapshot.get('force', False)
         msg = _LI("Create snapshot from volume %s")

@@ -163,7 +163,7 @@ class API(base.Base):
                scheduler_hints=None,
                source_replica=None, consistencygroup=None,
                cgsnapshot=None, multiattach=False):
-
+        LOG.debug("\n++++ name is %s"%(name))
         # NOTE(jdg): we can have a create without size if we're
         # doing a create from snap or volume.  Currently
         # the taskflow api will handle this and pull in the
@@ -219,6 +219,8 @@ class API(base.Base):
         availability_zones = set([az['name'] for az in raw_zones])
         if CONF.storage_availability_zone:
             availability_zones.add(CONF.storage_availability_zone)
+        
+        LOG.debug("+++++ snapshot is %s "%(snapshot))
 
         create_what = {
             'context': context,
@@ -239,6 +241,7 @@ class API(base.Base):
             'cgsnapshot': cgsnapshot,
             'multiattach': multiattach,
         }
+        LOG.debug("\n+++ prashant create_what is %s "%(create_what))
         try:
             if cgsnapshot:
                 flow_engine = create_volume.get_flow_no_rpc(self.db,
@@ -441,6 +444,13 @@ class API(base.Base):
 
     def get_snapshot(self, context, snapshot_id):
         return objects.Snapshot.get_by_id(context, snapshot_id)
+    
+    def get_snapshot_by_name(self,context,snapshot_name):
+        return objects.Snapshot.get_by_name(context,snapshot_name)
+
+    def get_volume_by_name(self,context,volume_name):
+        rv=self.db.volume_get_by_name(context,volume_name)
+        return dict(rv.iteritems())
 
     def get_volume(self, context, volume_id):
         check_policy(context, 'get_volume')
